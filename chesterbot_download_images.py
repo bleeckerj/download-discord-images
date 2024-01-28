@@ -16,9 +16,9 @@ with open('./config.json', 'r') as file:
 # Configuration
 #YOUR_CHANNEL_ID = 980108517929283604
 #YOUR_CHANNEL_ID = 1089358474426712224  # Replace with your channel ID
-YOUR_CHANNEL_ID = 980108517929283604
+YOUR_CHANNEL_ID = config["channel_id"]
 START_MESSAGE_ID = 0  # Set to 0 to start from the beginning, or specific message ID to start from that message
-MESSAGE_QUANTITY = 100  # Number of messages to examine
+MESSAGE_QUANTITY = config["message_quantity"] # Number of messages to examine
 DELAY_SECONDS = config["delay_secs"]
 LOOP_COUNTER = 50  # Number of loops after which to introduce a delay
 LOOP_DELAY_SECONDS = config["loop_delay_secs"]
@@ -27,9 +27,11 @@ LOOP_DELAY_SECONDS = config["loop_delay_secs"]
 async def on_ready():
     print(f'Logged in as {client.user}')
     channel = client.get_channel(YOUR_CHANNEL_ID)
+    channel_name = channel.name
     image_dir_root = config['image_dir_root']
+    channel_dir = image_dir_root+'/'+channel_name+"_"+str(YOUR_CHANNEL_ID)+"/"
     # Ensure the directory to save images exists
-    os.makedirs(image_dir_root+'/'+str(YOUR_CHANNEL_ID)+"/", exist_ok=True)  # Replace with your save path
+    os.makedirs(channel_dir, exist_ok=True)  # Replace with your save path
 
     # Fetch the most recent message ID
     async for last_message in channel.history(limit=1):
@@ -42,7 +44,6 @@ async def on_ready():
 
     print(f"First message ID in the channel: {first_message_id}")
     print(f"Last message ID in the channel: {last_message_id}")
-
     # Start processing messages
     reached_start = START_MESSAGE_ID == 0
     message_count = 0
@@ -72,7 +73,7 @@ async def on_ready():
                     formatted_filename = f"{timestamp}_{attachment.filename}"
 
 
-                    file_path = os.path.join(image_dir_root+'/'+str(YOUR_CHANNEL_ID)+"/", formatted_filename)  # Replace with your save path
+                    file_path = os.path.join(channel_dir, formatted_filename)  # Replace with your save path
                     with open(file_path, 'wb') as file:
                         file.write(response.content)
                     print(f'Downloaded {attachment.filename}')
