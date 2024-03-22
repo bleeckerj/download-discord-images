@@ -3,6 +3,7 @@ import requests
 import os
 import json
 import asyncio
+from datetime import datetime
 
 intents = discord.Intents.default()
 intents.messages = True  # Enables receiving messages
@@ -27,12 +28,30 @@ LOOP_DELAY_SECONDS = config["loop_delay_secs"]
 async def on_ready():
     print(f'Logged in as {client.user}')
     channel = client.get_channel(YOUR_CHANNEL_ID)
-    channel_name = channel.name
+    channel_name = getattr(channel, 'name', 'midjourney_g')
     image_dir_root = config['image_dir_root']
     channel_dir = image_dir_root+'/'+channel_name+"_"+str(YOUR_CHANNEL_ID)+"/"
     # Ensure the directory to save images exists
     os.makedirs(channel_dir, exist_ok=True)  # Replace with your save path
 
+    # Fetch the first message in the channel's history
+    async for message in channel.history(limit=1, oldest_first=True):
+        # Convert message to a dictionary and then to a JSON string
+        message_details = {
+            "author": str(message.author),
+            "content": message.content,
+            "created_at": str(message.created_at),
+            "id": str(message.id),
+            "attachments": [attachment.url for attachment in message.attachments]
+        }
+        message_json = json.dumps(message_details, indent=4)
+        print(message_json)
+        print(f"First message created at {message.created_at}")
+        first_created_at = message.created_at
+        #break  # Break after the first message
+    
+    
+    
     # Fetch the most recent message ID
     async for last_message in channel.history(limit=1):
         last_message_id = last_message.id if last_message else None
@@ -47,24 +66,33 @@ async def on_ready():
     # Start processing messages
     reached_start = START_MESSAGE_ID == 0
     message_count = 0
-    earliest_message_id = 0 #first_message_id
+    after_id = config["after_id"]
     loop_count = 0
     count = 0
     while True:
         messages_fetched = 0
 
-        async for message in channel.history(limit=100, before=discord.Object(id=earliest_message_id) if earliest_message_id else None):
+        async for message in channel.history(limit=100, after=discord.Object(id=first_message_id) if after_id else None):               
             messages_fetched += 1
             count += 1
             timestamp = message.created_at.strftime('%m/%d/%Y @ %H:%M:%S')
             #print(f"{timestamp}")
+            
+            # Construct the URL to the message
+            message_url = f"https://discord.com/channels/{message.guild.id if message.guild else '@me'}/{message.channel.id}/{message.id}"
+
             
             if message_count >= MESSAGE_QUANTITY:
                 break
             
             formatted = "{:03d}".format(count)
             fetched_count = "{:03d}".format(messages_fetched)
-            print(f"{fetched_count}.{formatted}.{timestamp}.({len(message.attachments)})")
+            difference = first_created_at - message.created_at
+
+            # Get the number of days from the difference
+            number_of_days = abs(difference.days)  # Use abs to get the absolute value
+            print(f"Count[{fetched_count}] @ {timestamp} and {difference} days to go...")
+
             for attachment in message.attachments:
                 if any(attachment.filename.endswith(ext) for ext in ['png', 'jpg', 'jpeg', 'gif', 'webp']):
                     response = requests.get(attachment.url)
@@ -76,10 +104,34 @@ async def on_ready():
                     file_path = os.path.join(channel_dir, formatted_filename)  # Replace with your save path
                     with open(file_path, 'wb') as file:
                         file.write(response.content)
-                    print(f'Downloaded {attachment.filename}')
+                    print(f'From {message_url}')
+                    print(f"{attachment.filename}")
+                    # Save message details in a JSON file
+                    message_details = {
+                        "author": str(message.author),
+                        "content": message.content,
+                        "created_at": str(message.created_at),
+                        "id": str(message.id),
+                        "channel_id": str(channel.id),
+                        "channel_name": str(channel_name),
+                        "attachments": [attachment.url for attachment in message.attachments],
+                        "message_url" : message_url
+                    }
+                    json_file_path = os.path.join(channel_dir, f"{timestamp}_{attachment.filename}".replace(attachment.filename.split('.')[-1], 'json'))
+                    with open(json_file_path, 'w') as json_file:
+                        json.dump(message_details, json_file, indent=4)
+                    print(f'Saved message details as JSON for {attachment.filename}')
 
             if message_count >= MESSAGE_QUANTITY:
                 break
+            
+            if message.id == first_message_id:
+                print("Reached the start of the channel. Exiting loop.")
+                return  # Use return to exit the on_ready function, thus breaking the loop
+
+            # if message.id == last_message_id:
+            #     print("End of the channel!")
+            #     return
 
             earliest_message_id = message.id
 
