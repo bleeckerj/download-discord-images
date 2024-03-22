@@ -3,6 +3,7 @@ import requests
 import os
 import json
 import asyncio
+import sys
 from datetime import datetime
 
 intents = discord.Intents.default()
@@ -72,7 +73,7 @@ async def on_ready():
     while True:
         messages_fetched = 0
 
-        async for message in channel.history(limit=100, after=discord.Object(id=first_message_id) if after_id else None):               
+        async for message in channel.history(limit=100, after=discord.Object(id=after_id) if after_id else None):               
             messages_fetched += 1
             count += 1
             timestamp = message.created_at.strftime('%m/%d/%Y @ %H:%M:%S')
@@ -98,10 +99,14 @@ async def on_ready():
                     response = requests.get(attachment.url)
                     
                     timestamp = message.created_at.strftime('%Y%m%d_%H%M')
-                    formatted_filename = f"{timestamp}_{attachment.filename}"
+                    formatted_filename = f"{timestamp}_{message.id}_{attachment.filename}"
 
 
                     file_path = os.path.join(channel_dir, formatted_filename)  # Replace with your save path
+                    
+                    if os.path.exists(file_path):
+                        print(f"File {file_path} already exists. Skipping")
+                        continue
                     with open(file_path, 'wb') as file:
                         file.write(response.content)
                     print(f'From {message_url}')
@@ -117,11 +122,22 @@ async def on_ready():
                         "attachments": [attachment.url for attachment in message.attachments],
                         "message_url" : message_url
                     }
-                    json_file_path = os.path.join(channel_dir, f"{timestamp}_{attachment.filename}".replace(attachment.filename.split('.')[-1], 'json'))
-                    with open(json_file_path, 'w') as json_file:
-                        json.dump(message_details, json_file, indent=4)
-                    print(f'Saved message details as JSON for {attachment.filename}')
-
+                    json_file_path = os.path.join(channel_dir, f"{timestamp}_{message.id}_{attachment.filename}".replace(attachment.filename.split('.')[-1], 'json'))
+                    
+                    if os.path.exists(json_file_path):
+                        print(f"File {json_file_path} already exists. Skipping")
+                        # response = input(f"File {json_file_path} already exists. Do you want to overwrite it? (yes/no): ")
+                        # if response.lower() != 'yes':
+                        #     print("Operation aborted.")
+                        #     sys.exit(None)
+                        # Halt the program, exit or handle the situation as per your requirement
+                        # For example, you can raise an exception to halt the program:
+                        # raise FileExistsError(f"File {json_file_path} already exists.")
+                    else:
+                        with open(json_file_path, 'w') as json_file:
+                            json.dump(message_details, json_file, indent=4)
+                        print(f'Saved message details as JSON for {attachment.filename}')                    
+                        
             if message_count >= MESSAGE_QUANTITY:
                 break
             
