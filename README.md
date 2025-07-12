@@ -7,7 +7,7 @@ This repository contains a script to download images from a specified Discord ch
 1. Clone this repository:
 
    ```bash
-   git clone https://github.com/bleeckerj/download-discord-images.git
+   git clone https://github.com/NearFutureLaboratory/download-discord-channel-images.git
    ```
 
 2. Install the required dependencies:
@@ -45,8 +45,35 @@ This repository contains a script to download images from a specified Discord ch
 5. Run the script:
 
    ```bash
-   python3 chesterbot_download_images.py
+   python3 download_images_from_discord_channel.py
    ```
+
+## File Organization
+
+The script organizes downloaded files in a hierarchical structure:
+
+```
+/image_dir_root/
+  /channel_name_CHANNEL_ID/
+    /images/
+      /YEAR/
+        /MONTH/
+          YYYYMMDD_HHMM_MESSAGE_ID_filename.png
+    /json/
+      /YEAR/
+        /MONTH/
+          YYYYMMDD_HHMM_MESSAGE_ID_filename.json
+```
+
+This organization helps manage large collections and maintain relationships between JSON metadata and image files.
+
+* **Images**: Stored in year/month subdirectories for easy navigation
+* **JSON Files**: Each JSON file contains metadata about the corresponding image, including:
+  - Message content
+  - Author information
+  - Creation date
+  - Message URL
+  - Relative and absolute paths to the image file
 
 ## Security Notes
 
@@ -58,6 +85,24 @@ This repository contains a script to download images from a specified Discord ch
 * Adjust `message_quantity` to control how many messages to process.
 * Modify `delay_secs` and `loop_delay_secs` to manage rate limiting.
 * The script will save images and message details in the specified `image_dir_root`.
+* Existing files will be updated or moved to the proper directory structure automatically.
+* The `after_id` parameter can be used to start collecting from a specific message ID.
+
+## How to Obtain a Discord Bot Token
+
+1. Navigate to the [Discord Developer Portal](https://discord.com/developers/applications).
+
+2. Click on **"New Application"** and give it a name.
+
+3. Select your application, then go to the **"Bot"** tab on the left sidebar.
+
+4. Click **"Add Bot"** and confirm.
+
+5. Under the **"Token"** section, click **"Copy"** to copy your bot token.
+
+6. **Important:** Keep this token private. Do not share it or commit it to version control.
+
+7. Paste the token into your `config.json` file in place of `"YOUR_DISCORD_BOT_TOKEN"`.
 
 ## License
 

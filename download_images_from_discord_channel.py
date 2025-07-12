@@ -72,16 +72,21 @@ async def on_ready():
     count = 0
     while True:
         messages_fetched = 0
+        newest_id = after_id  # Track the newest message ID in this batch
 
         async for message in channel.history(limit=100, after=discord.Object(id=after_id) if after_id else None):               
             messages_fetched += 1
             count += 1
+            message_count += 1  # Increment message_count to track progress toward MESSAGE_QUANTITY
             timestamp = message.created_at.strftime('%m/%d/%Y @ %H:%M:%S')
             #print(f"{timestamp}")
             
+            # Keep track of the newest message ID we've seen
+            if not newest_id or int(message.id) > int(newest_id):
+                newest_id = message.id
+            
             # Construct the URL to the message
             message_url = f"https://discord.com/channels/{message.guild.id if message.guild else '@me'}/{message.channel.id}/{message.id}"
-
             
             if message_count >= MESSAGE_QUANTITY:
                 break
@@ -99,10 +104,15 @@ async def on_ready():
                     response = requests.get(attachment.url)
                     
                     timestamp = message.created_at.strftime('%Y%m%d_%H%M')
+                    year_month = message.created_at.strftime('%Y/%m')
                     formatted_filename = f"{timestamp}_{message.id}_{attachment.filename}"
 
-
-                    file_path = os.path.join(channel_dir, formatted_filename)  # Replace with your save path
+                    # Create year/month directory structure
+                    image_subdir = os.path.join(channel_dir, "images", year_month)
+                    os.makedirs(image_subdir, exist_ok=True)
+                    
+                    # Update file path to include the year/month structure
+                    file_path = os.path.join(image_subdir, formatted_filename)
                     
                     if os.path.exists(file_path):
                         print(f"File {file_path} already exists. Skipping")
@@ -111,6 +121,10 @@ async def on_ready():
                         file.write(response.content)
                     print(f'From {message_url}')
                     print(f"{attachment.filename}")
+                    
+                    # Maintain the relative path for referencing
+                    relative_path = os.path.join("images", year_month, formatted_filename)
+                    
                     # Save message details in a JSON file
                     message_details = {
                         "author": str(message.author),
@@ -120,23 +134,52 @@ async def on_ready():
                         "channel_id": str(channel.id),
                         "channel_name": str(channel_name),
                         "attachments": [attachment.url for attachment in message.attachments],
-                        "message_url" : message_url
+                        "message_url": message_url,
+                        "downloaded_filename": formatted_filename,
+                        "image_path": relative_path,
+                        "full_path": file_path
                     }
-                    json_file_path = os.path.join(channel_dir, f"{timestamp}_{message.id}_{attachment.filename}".replace(attachment.filename.split('.')[-1], 'json'))
                     
-                    if os.path.exists(json_file_path):
-                        print(f"File {json_file_path} already exists. Skipping")
-                        # response = input(f"File {json_file_path} already exists. Do you want to overwrite it? (yes/no): ")
-                        # if response.lower() != 'yes':
-                        #     print("Operation aborted.")
-                        #     sys.exit(None)
-                        # Halt the program, exit or handle the situation as per your requirement
-                        # For example, you can raise an exception to halt the program:
-                        # raise FileExistsError(f"File {json_file_path} already exists.")
-                    else:
-                        with open(json_file_path, 'w') as json_file:
+                    # Create JSON year/month directory structure (similar to images)
+                    json_year_month = message.created_at.strftime('%Y/%m')
+                    json_subdir = os.path.join(channel_dir, "json", json_year_month)
+                    os.makedirs(json_subdir, exist_ok=True)
+                    
+                    # Create JSON filename
+                    json_filename = f"{timestamp}_{message.id}_{attachment.filename}".replace(attachment.filename.split('.')[-1], 'json')
+                    
+                    # New path for JSON in the organized directory structure
+                    new_json_path = os.path.join(json_subdir, json_filename)
+                    
+                    # Old path (where JSON might already exist)
+                    old_json_path = os.path.join(channel_dir, json_filename)
+                    
+                    # Check if JSON exists in old location
+                    if os.path.exists(old_json_path):
+                        print(f"Found JSON in old location: {old_json_path}")
+                        # Move JSON to new location
+                        if not os.path.exists(new_json_path):
+                            os.makedirs(os.path.dirname(new_json_path), exist_ok=True)
+                            os.rename(old_json_path, new_json_path)
+                            print(f"Moved JSON from {old_json_path} to {new_json_path}")
+                        else:
+                            print(f"JSON already exists at new location. Skipping move.")
+                    
+                    # Update message_details with the new JSON path
+                    message_details["json_path"] = os.path.join("json", json_year_month, json_filename)
+                    
+                    # Check if JSON exists in new location
+                    if os.path.exists(new_json_path):
+                        print(f"JSON file {new_json_path} already exists. Updating...")
+                        # Update the JSON file
+                        with open(new_json_path, 'w') as json_file:
                             json.dump(message_details, json_file, indent=4)
-                        print(f'Saved message details as JSON for {attachment.filename}')                    
+                        print(f"Updated JSON metadata for {attachment.filename}")
+                    else:
+                        # Create new JSON file
+                        with open(new_json_path, 'w') as json_file:
+                            json.dump(message_details, json_file, indent=4)
+                        print(f'Saved message details as JSON for {attachment.filename}')
                         
             if message_count >= MESSAGE_QUANTITY:
                 break
@@ -156,12 +199,31 @@ async def on_ready():
             # # indicating we have reached the beginning of the channel history
             #     break
 
-            # Delay after every 100 loops
-            if loop_count >= LOOP_COUNTER:
-                print(f"Pausing for {DELAY_SECONDS} seconds...")
-                await asyncio.sleep(DELAY_SECONDS)
-                loop_count = 0  # Reset the loop counter
-            await asyncio.sleep(LOOP_DELAY_SECONDS)
+            # Update the after_id to the newest message ID in this batch
+        if newest_id and newest_id != after_id:
+            after_id = newest_id
+            print(f"Updated after_id to {after_id} for next batch")
+        else:
+            print("No new messages found. Exiting.")
+            break
+            
+        # If we've reached the message quantity limit, exit
+        if message_count >= MESSAGE_QUANTITY:
+            print(f"Reached message quantity limit of {MESSAGE_QUANTITY}. Exiting.")
+            break
+            
+        # If we didn't fetch any messages, we've reached the end
+        if messages_fetched == 0:
+            print("No more messages to fetch. Exiting.")
+            break
+            
+        # Delay after every LOOP_COUNTER loops
+        if loop_count >= LOOP_COUNTER:
+            print(f"Pausing for {DELAY_SECONDS} seconds...")
+            await asyncio.sleep(DELAY_SECONDS)
+            loop_count = 0  # Reset the loop counter
+        loop_count += 1  # Don't forget to increment the loop counter
+        await asyncio.sleep(LOOP_DELAY_SECONDS)
 
 
 client.run(config['token'])  # Replace with your bot token
