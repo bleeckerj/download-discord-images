@@ -36,6 +36,7 @@ async def on_ready():
     os.makedirs(channel_dir, exist_ok=True)  # Replace with your save path
 
     # Fetch the first message in the channel's history
+    first_created_at = None
     async for message in channel.history(limit=1, oldest_first=True):
         # Convert message to a dictionary and then to a JSON string
         message_details = {
@@ -49,7 +50,7 @@ async def on_ready():
         print(message_json)
         print(f"First message created at {message.created_at}")
         first_created_at = message.created_at
-        #break  # Break after the first message
+        break  # Break after the first message to ensure we get only one
     
     
     
@@ -67,14 +68,48 @@ async def on_ready():
     # Start processing messages
     reached_start = START_MESSAGE_ID == 0
     message_count = 0
-    after_id = config["after_id"]
+    
+    # Set after_id based on config or command line arguments
+    # If after_id is set to "oldest", we'll start from the beginning
+    start_from_oldest = False
+    if "after_id" in config and config["after_id"] == "oldest":
+        after_id = None  # None means start from the beginning
+        start_from_oldest = True
+        print("Starting from the oldest message in the channel")
+    else:
+        after_id = config["after_id"]
+        print(f"Starting after message ID: {after_id}")
+        
     loop_count = 0
     count = 0
     while True:
         messages_fetched = 0
         newest_id = after_id  # Track the newest message ID in this batch
 
-        async for message in channel.history(limit=100, after=discord.Object(id=after_id) if after_id else None):               
+        # Configure history parameters based on our mode
+        if start_from_oldest:
+            # When starting from oldest, use oldest_first=True for first batch
+            # For subsequent batches, use after=newest_id to continue in chronological order
+            history_params = {
+                'limit': 100,
+                'oldest_first': True if after_id is None else False
+            }
+            
+            # After the first batch, use the after_id parameter to continue from where we left off
+            if after_id is not None:
+                history_params['after'] = discord.Object(id=after_id)
+                # Turn off oldest_first after first batch
+                history_params['oldest_first'] = False
+        else:
+            # Normal mode: fetch messages after the given ID
+            history_params = {
+                'limit': 100,
+                'oldest_first': False
+            }
+            if after_id:
+                history_params['after'] = discord.Object(id=after_id)
+            
+        async for message in channel.history(**history_params):               
             messages_fetched += 1
             count += 1
             message_count += 1  # Increment message_count to track progress toward MESSAGE_QUANTITY
@@ -95,9 +130,12 @@ async def on_ready():
             fetched_count = "{:03d}".format(messages_fetched)
             difference = first_created_at - message.created_at
 
-            # Get the number of days from the difference
-            number_of_days = abs(difference.days)  # Use abs to get the absolute value
-            print(f"Count[{fetched_count}] @ {timestamp} and {difference} days to go...")
+            # Get the number of days from the difference (if first_created_at is available)
+            if first_created_at:
+                number_of_days = abs(difference.days)  # Use abs to get the absolute value
+                print(f"Count[{fetched_count}] @ {timestamp} and {difference} days to go...")
+            else:
+                print(f"Count[{fetched_count}] @ {timestamp} - Processing message {message.id}")
 
             for attachment in message.attachments:
                 if any(attachment.filename.endswith(ext) for ext in ['png', 'jpg', 'jpeg', 'gif', 'webp']):
@@ -184,13 +222,15 @@ async def on_ready():
             if message_count >= MESSAGE_QUANTITY:
                 break
             
-            if message.id == first_message_id:
+            # Only check for reaching the start when NOT starting from oldest
+            if not start_from_oldest and message.id == first_message_id:
                 print("Reached the start of the channel. Exiting loop.")
                 return  # Use return to exit the on_ready function, thus breaking the loop
 
-            # if message.id == last_message_id:
-            #     print("End of the channel!")
-            #     return
+            # When starting from oldest, check if we've reached the newest message
+            if start_from_oldest and message.id == last_message_id:
+                print("Reached the newest message in the channel. Exiting loop.")
+                return  # Exit function
 
             earliest_message_id = message.id
 
@@ -199,12 +239,23 @@ async def on_ready():
             # # indicating we have reached the beginning of the channel history
             #     break
 
-            # Update the after_id to the newest message ID in this batch
-        if newest_id and newest_id != after_id:
-            after_id = newest_id
-            print(f"Updated after_id to {after_id} for next batch")
+        # Check if we actually processed any messages in this batch
+        if messages_fetched == 0:
+            print("No messages fetched in this batch. Exiting.")
+            break
+            
+        # Update the after_id to the newest message ID in this batch
+        if newest_id and (after_id is None or newest_id != after_id):
+            # When using oldest_first=True, we need to use the newest ID to continue in chronological order
+            if start_from_oldest:
+                print(f"Processed batch of {messages_fetched} messages, continuing from ID {newest_id}")
+                after_id = newest_id
+            else:
+                print(f"Updated after_id to {newest_id} for next batch")
+                after_id = newest_id
         else:
-            print("No new messages found. Exiting.")
+            # If the newest ID is the same as our after_id, we're not progressing
+            print("No new messages found (IDs not advancing). Exiting.")
             break
             
         # If we've reached the message quantity limit, exit
@@ -212,9 +263,16 @@ async def on_ready():
             print(f"Reached message quantity limit of {MESSAGE_QUANTITY}. Exiting.")
             break
             
-        # If we didn't fetch any messages, we've reached the end
+        # This is redundant now since we check at the top of the loop
+        # but keeping it for clarity
         if messages_fetched == 0:
             print("No more messages to fetch. Exiting.")
+            break
+            
+        # Add a counter to prevent infinite loops
+        # If we've processed more than double the MESSAGE_QUANTITY, something is wrong
+        if message_count > MESSAGE_QUANTITY * 2:
+            print(f"Processed {message_count} messages, which is more than double the requested quantity. Stopping as a safety measure.")
             break
             
         # Delay after every LOOP_COUNTER loops

@@ -30,7 +30,7 @@ This repository contains a script to download images from a specified Discord ch
        "loop_delay_secs": 0.1,
        "channel_id": YOUR_CHANNEL_ID,
        "message_quantity": 10000,
-       "after_id": 0
+       "after_id": "oldest"
    }
    ```
 
@@ -86,7 +86,10 @@ This organization helps manage large collections and maintain relationships betw
 * Modify `delay_secs` and `loop_delay_secs` to manage rate limiting.
 * The script will save images and message details in the specified `image_dir_root`.
 * Existing files will be updated or moved to the proper directory structure automatically.
-* The `after_id` parameter can be used to start collecting from a specific message ID.
+* The `after_id` parameter can be used to start collecting from a specific message ID:
+  - Use a specific message ID to start after that message
+  - Use `"oldest"` to start from the absolute beginning of the channel
+  - Use a numeric ID to start after that specific message
 
 ## How to Obtain a Discord Bot Token
 
