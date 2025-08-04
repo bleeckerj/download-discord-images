@@ -5,6 +5,7 @@ import json
 import asyncio
 import sys
 from datetime import datetime
+import logging
 
 intents = discord.Intents.default()
 intents.messages = True  # Enables receiving messages
@@ -25,9 +26,16 @@ DELAY_SECONDS = config["delay_secs"]
 LOOP_COUNTER = 50  # Number of loops after which to introduce a delay
 LOOP_DELAY_SECONDS = config["loop_delay_secs"]
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
+
 @client.event
 async def on_ready():
-    print(f'Logged in as {client.user}')
+    logger.info(f'Logged in as {client.user}')
     channel = client.get_channel(YOUR_CHANNEL_ID)
     channel_name = getattr(channel, 'name', 'midjourney_g')
     image_dir_root = config['image_dir_root']
@@ -47,8 +55,8 @@ async def on_ready():
             "attachments": [attachment.url for attachment in message.attachments]
         }
         message_json = json.dumps(message_details, indent=4)
-        print(message_json)
-        print(f"First message created at {message.created_at}")
+        logger.info(message_json)
+        logger.info(f"First message created at {message.created_at}")
         first_created_at = message.created_at
         break  # Break after the first message to ensure we get only one
     
@@ -63,8 +71,8 @@ async def on_ready():
     async for first_message in channel.history(limit=1, oldest_first=True):
         first_message_id = first_message.id if first_message else None
 
-    print(f"First message ID in the channel: {first_message_id}")
-    print(f"Last message ID in the channel: {last_message_id}")
+    logger.info(f"First message ID in the channel: {first_message_id}")
+    logger.info(f"Last message ID in the channel: {last_message_id}")
     # Start processing messages
     reached_start = START_MESSAGE_ID == 0
     message_count = 0
@@ -75,10 +83,10 @@ async def on_ready():
     if "after_id" in config and config["after_id"] == "oldest":
         after_id = None  # None means start from the beginning
         start_from_oldest = True
-        print("Starting from the oldest message in the channel")
+        logger.info("Starting from the oldest message in the channel")
     else:
         after_id = config["after_id"]
-        print(f"Starting after message ID: {after_id}")
+        logger.info(f"Starting after message ID: {after_id}")
         
     loop_count = 0
     count = 0
@@ -114,7 +122,15 @@ async def on_ready():
             count += 1
             message_count += 1  # Increment message_count to track progress toward MESSAGE_QUANTITY
             timestamp = message.created_at.strftime('%m/%d/%Y @ %H:%M:%S')
-            #print(f"{timestamp}")
+            # Log the full message object for inspection
+            try:
+                if hasattr(message, 'to_dict'):
+                    logger.info(f"Full message object: {json.dumps(message.to_dict(), indent=2)}")
+                else:
+                    # Fallback: log selected fields and string representation
+                    logger.info(f"Full message object: {str(message)}")
+            except Exception as e:
+                logger.info(f"Error logging full message object: {e}")
             
             # Keep track of the newest message ID we've seen
             if not newest_id or int(message.id) > int(newest_id):
@@ -133,12 +149,16 @@ async def on_ready():
             # Get the number of days from the difference (if first_created_at is available)
             if first_created_at:
                 number_of_days = abs(difference.days)  # Use abs to get the absolute value
-                print(f"Count[{fetched_count}] @ {timestamp} and {difference} days to go...")
+                logger.info(f"Count[{fetched_count}] @ {timestamp} and {difference} days to go...")
             else:
-                print(f"Count[{fetched_count}] @ {timestamp} - Processing message {message.id}")
+                logger.info(f"Count[{fetched_count}] @ {timestamp} - Processing message {message.id}")
 
             for attachment in message.attachments:
-                if any(attachment.filename.endswith(ext) for ext in ['png', 'jpg', 'jpeg', 'gif', 'webp']):
+                logging.debug(f"Attachment Json: {json.dumps(attachment.to_dict(), indent=2)}")
+                logging.info(f"Processing attachment: {attachment.filename}")
+                logging.info(f"Attachment URL: {attachment.url}")
+                logging.info(f"Attachment Filename Ends With: {attachment.filename.split('.')[-1]}")
+                if any(attachment.filename.endswith(ext) for ext in ['mp4', 'png', 'jpg', 'jpeg', 'gif', 'webp']):
                     response = requests.get(attachment.url)
                     
                     timestamp = message.created_at.strftime('%Y%m%d_%H%M')
@@ -153,12 +173,13 @@ async def on_ready():
                     file_path = os.path.join(image_subdir, formatted_filename)
                     
                     if os.path.exists(file_path):
-                        print(f"File {file_path} already exists. Skipping")
+                        logger.info(f"File {file_path} already exists. Skipping")
                         continue
                     with open(file_path, 'wb') as file:
                         file.write(response.content)
-                    print(f'From {message_url}')
-                    print(f"{attachment.filename}")
+                    logger.info(f'From {message_url}')
+                    logger.info(f"{attachment.filename}")
+                    logger.info(f"Downloaded attachment: {attachment.filename} from {attachment.url}")
                     
                     # Maintain the relative path for referencing
                     relative_path = os.path.join("images", year_month, formatted_filename)
@@ -194,42 +215,42 @@ async def on_ready():
                     
                     # Check if JSON exists in old location
                     if os.path.exists(old_json_path):
-                        print(f"Found JSON in old location: {old_json_path}")
+                        logger.info(f"Found JSON in old location: {old_json_path}")
                         # Move JSON to new location
                         if not os.path.exists(new_json_path):
                             os.makedirs(os.path.dirname(new_json_path), exist_ok=True)
                             os.rename(old_json_path, new_json_path)
-                            print(f"Moved JSON from {old_json_path} to {new_json_path}")
+                            logger.info(f"Moved JSON from {old_json_path} to {new_json_path}")
                         else:
-                            print(f"JSON already exists at new location. Skipping move.")
+                            logger.info(f"JSON already exists at new location. Skipping move.")
                     
                     # Update message_details with the new JSON path
                     message_details["json_path"] = os.path.join("json", json_year_month, json_filename)
                     
                     # Check if JSON exists in new location
                     if os.path.exists(new_json_path):
-                        print(f"JSON file {new_json_path} already exists. Updating...")
+                        logger.info(f"JSON file {new_json_path} already exists. Updating...")
                         # Update the JSON file
                         with open(new_json_path, 'w') as json_file:
                             json.dump(message_details, json_file, indent=4)
-                        print(f"Updated JSON metadata for {attachment.filename}")
+                        logger.info(f"Updated JSON metadata for {attachment.filename}")
                     else:
                         # Create new JSON file
                         with open(new_json_path, 'w') as json_file:
                             json.dump(message_details, json_file, indent=4)
-                        print(f'Saved message details as JSON for {attachment.filename}')
+                        logger.info(f'Saved message details as JSON for {attachment.filename}')
                         
             if message_count >= MESSAGE_QUANTITY:
                 break
             
             # Only check for reaching the start when NOT starting from oldest
             if not start_from_oldest and message.id == first_message_id:
-                print("Reached the start of the channel. Exiting loop.")
+                logger.info("Reached the start of the channel. Exiting loop.")
                 return  # Use return to exit the on_ready function, thus breaking the loop
 
             # When starting from oldest, check if we've reached the newest message
             if start_from_oldest and message.id == last_message_id:
-                print("Reached the newest message in the channel. Exiting loop.")
+                logger.info("Reached the newest message in the channel. Exiting loop.")
                 return  # Exit function
 
             earliest_message_id = message.id
@@ -241,43 +262,43 @@ async def on_ready():
 
         # Check if we actually processed any messages in this batch
         if messages_fetched == 0:
-            print("No messages fetched in this batch. Exiting.")
+            logger.info("No messages fetched in this batch. Exiting.")
             break
             
         # Update the after_id to the newest message ID in this batch
         if newest_id and (after_id is None or newest_id != after_id):
             # When using oldest_first=True, we need to use the newest ID to continue in chronological order
             if start_from_oldest:
-                print(f"Processed batch of {messages_fetched} messages, continuing from ID {newest_id}")
+                logger.info(f"Processed batch of {messages_fetched} messages, continuing from ID {newest_id}")
                 after_id = newest_id
             else:
-                print(f"Updated after_id to {newest_id} for next batch")
+                logger.info(f"Updated after_id to {newest_id} for next batch")
                 after_id = newest_id
         else:
             # If the newest ID is the same as our after_id, we're not progressing
-            print("No new messages found (IDs not advancing). Exiting.")
+            logger.info("No new messages found (IDs not advancing). Exiting.")
             break
             
         # If we've reached the message quantity limit, exit
         if message_count >= MESSAGE_QUANTITY:
-            print(f"Reached message quantity limit of {MESSAGE_QUANTITY}. Exiting.")
+            logger.info(f"Reached message quantity limit of {MESSAGE_QUANTITY}. Exiting.")
             break
             
         # This is redundant now since we check at the top of the loop
         # but keeping it for clarity
         if messages_fetched == 0:
-            print("No more messages to fetch. Exiting.")
+            logger.info("No more messages to fetch. Exiting.")
             break
             
         # Add a counter to prevent infinite loops
         # If we've processed more than double the MESSAGE_QUANTITY, something is wrong
         if message_count > MESSAGE_QUANTITY * 2:
-            print(f"Processed {message_count} messages, which is more than double the requested quantity. Stopping as a safety measure.")
+            logger.info(f"Processed {message_count} messages, which is more than double the requested quantity. Stopping as a safety measure.")
             break
             
         # Delay after every LOOP_COUNTER loops
         if loop_count >= LOOP_COUNTER:
-            print(f"Pausing for {DELAY_SECONDS} seconds...")
+            logger.info(f"Pausing for {DELAY_SECONDS} seconds...")
             await asyncio.sleep(DELAY_SECONDS)
             loop_count = 0  # Reset the loop counter
         loop_count += 1  # Don't forget to increment the loop counter
