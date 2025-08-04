@@ -156,9 +156,11 @@ async def on_ready():
             for attachment in message.attachments:
                 logging.debug(f"Attachment Json: {json.dumps(attachment.to_dict(), indent=2)}")
                 logging.info(f"Processing attachment: {attachment.filename}")
-                logging.info(f"Attachment URL: {attachment.url}")
-                logging.info(f"Attachment Filename Ends With: {attachment.filename.split('.')[-1]}")
-                if any(attachment.filename.endswith(ext) for ext in ['mp4', 'png', 'jpg', 'jpeg', 'gif', 'webp']):
+                logging.debug(f"Attachment URL: {attachment.url}")
+                logging.debug(f"Attachment Filename Ends With: {attachment.filename.split('.')[-1]}")
+                if any(attachment.filename.lower().endswith(ext) for ext in [
+                    'mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', 'mpg', 'mpeg', 'wmv', 'flv', '3gp',
+                    'png', 'jpg', 'jpeg', 'gif', 'webp']):
                     response = requests.get(attachment.url)
                     
                     timestamp = message.created_at.strftime('%Y%m%d_%H%M')
@@ -239,7 +241,9 @@ async def on_ready():
                         with open(new_json_path, 'w') as json_file:
                             json.dump(message_details, json_file, indent=4)
                         logger.info(f'Saved message details as JSON for {attachment.filename}')
-                        
+                else:
+                    logger.warning(f"Skipping unsupported attachment type: {attachment.filename}")
+                    logger.warning(f"Unsupported attachment with filename extension: {attachment.filename.split('.')[-1]}")
             if message_count >= MESSAGE_QUANTITY:
                 break
             
