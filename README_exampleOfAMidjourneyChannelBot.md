@@ -1,3 +1,49 @@
+# Midjourney Discord Channel Bot Example
+
+This script demonstrates how to use the Discord API (via the `discord.py` library) to connect a bot to Discord, fetch direct messages (DMs) from a specific user, and print their contents. It is intended as a starting point for building bots that interact with Midjourney or similar channels.
+
+## Features
+
+- Connects to Discord using a bot token.
+- Fetches and prints the latest 100 direct messages from a specified user.
+- Loads configuration from `config.json`.
+
+## Setup
+
+1. **Install dependencies:**
+	```bash
+	pip install discord.py
+	```
+
+2. **Configure your bot:**
+	- Edit `config.json` and add your bot token and any other required fields.
+	- Replace the placeholder user ID in the script with the actual Discord user ID you want to fetch messages from.
+
+3. **Run the bot:**
+	```bash
+	python exampleOfAMidjourneyChannelBot.py
+	```
+
+## Configuration
+
+The bot expects a `config.json` file in the root directory. Example:
+```json
+{
+	 "token": "YOUR_DISCORD_BOT_TOKEN",
+	 "image_dir_root": "./images",
+	 "delay_secs": 5,
+	 "loop_delay_secs": 0.2,
+	 "channel_id": 123456789012345678,
+	 "message_quantity": 100,
+	 "after_id": "0"
+}
+```
+
+## Notes
+
+- Make sure your bot has permission to read messages and access DMs.
+- Never share your Discord bot token publicly.
+- This script is a minimal example and can be extended to download images, process messages, or interact with channels.
 # Example: Midjourney Channel Bot
 
 This README describes the purpose and functionality of `exampleOfAMidjourneyChannelBot.py`.
