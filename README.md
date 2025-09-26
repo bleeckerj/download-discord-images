@@ -1,8 +1,52 @@
-# Download Discord Images
+# 📥 Download Discord Images
+
+This repository contains utilities to download images from one or more Discord channels, organize metadata, and manage download progress across multiple channels.
+
+## 🚀 Multi-Channel Setup & Utilities
+
+### 1️⃣ Find Last IDs for All Channels
+
+Use `find_last_ids_per_channel.py` to scan your images directory and build a summary of all channels and their latest downloaded message IDs. This helps automate and track progress for each channel.
+
+**Usage:**
+```bash
+python3 find_last_ids_per_channel.py
+```
+This will create a file called `channels_last_ids.json` containing an array of objects:
+```json
+[
+  { "channel_id": "123456789012345678", "last_id": "987654321098765432" },
+  ...
+]
+```
+
+### 2️⃣ Download Images from Multiple Channels
+
+The main script `download_images_from_discord_channel.py` now supports downloading from multiple channels in one run! It reads `channels_last_ids.json` and processes each channel serially, starting from the last downloaded message for each channel.
+
+**Features:**
+- 🔄 Processes all channels listed in `channels_last_ids.json`, in order
+- 📝 Extensive logging: tracks which channel is being processed, progress, and status updates
+- 🗂️ Organizes images and metadata in per-channel/year/month folders
+- 🛡️ Automatically skips already-downloaded files and updates metadata
+- ⏱️ Respects rate limits and delays as configured in `config.json`
+
+**Config File (`config.json`)**
+Still required for shared settings:
+* `token` (Discord bot token)
+* `image_dir_root` (root directory for images)
+* `message_quantity` (max messages per channel)
+* `delay_secs`, `loop_delay_secs` (rate limiting)
+
+**How it works:**
+1. Run `find_last_ids_per_channel.py` to generate/update `channels_last_ids.json`.
+2. Run `download_images_from_discord_channel.py` to process all channels and download new images/messages.
+
+---
 
 This repository contains a script to download images from a specified Discord channel.
 
-## Setup Instructions
+## 🛠️ Setup Instructions
 
 1. Clone this repository:
 
@@ -34,7 +78,7 @@ This repository contains a script to download images from a specified Discord ch
    }
    ```
 
-   Replace `YOUR_DISCORD_BOT_TOKEN` with your Discord bot token, and `YOUR_CHANNEL_ID` with the target channel ID.
+  Replace `YOUR_DISCORD_BOT_TOKEN` with your Discord bot token. The script will use `channels_last_ids.json` for channel IDs and starting points.
 
 4. Ensure your bot has the necessary permissions:
 
@@ -44,11 +88,16 @@ This repository contains a script to download images from a specified Discord ch
 
 5. Run the script:
 
-   ```bash
-   python3 download_images_from_discord_channel.py
-   ```
+   - To update channel progress:
+     ```bash
+     python3 find_last_ids_per_channel.py
+     ```
+   - To download images from all channels:
+     ```bash
+     python3 download_images_from_discord_channel.py
+     ```
 
-## File Organization
+## 🗂️ File Organization
 
 The script organizes downloaded files in a hierarchical structure:
 
@@ -86,7 +135,11 @@ Look to the repository `https://github.com/bleeckerj/Files2Book.git` if you want
 * Keep your Discord token private. Do not share it or commit it to version control.
 * Use environment variables or secure vaults for production deployments.
 
-## Usage Tips
+## 💡 Usage Tips
+
+- Use `find_last_ids_per_channel.py` regularly to keep `channels_last_ids.json` up to date.
+- The downloader will process all channels in `channels_last_ids.json` in order, starting from the last downloaded message for each.
+- Logging will show which channel is being processed and progress for each.
 
 * Adjust `message_quantity` to control how many messages to process.
 * Modify `delay_secs` and `loop_delay_secs` to manage rate limiting.
@@ -97,7 +150,7 @@ Look to the repository `https://github.com/bleeckerj/Files2Book.git` if you want
   - Use `"oldest"` to start from the absolute beginning of the channel
   - Use a numeric ID to start after that specific message
 
-## How to Obtain a Discord Bot Token
+## 🔑 How to Obtain a Discord Bot Token
 
 1. Navigate to the [Discord Developer Portal](https://discord.com/developers/applications).
 
@@ -113,7 +166,7 @@ Look to the repository `https://github.com/bleeckerj/Files2Book.git` if you want
 
 7. Paste the token into your `config.json` file in place of `"YOUR_DISCORD_BOT_TOKEN"`.
 
-## Creating a Discord Bot
+## 🤖 Creating a Discord Bot
 
 A bit beyond the context here to provide instructions for creating a Discord Bot. There are plenty of tutorials out there in the world, cf: https://www.youtube.com/watch?v=YD_N6Ffoojw
 
